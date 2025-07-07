@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Time Study Tool</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0056b3"/>
+    <style>
+        :root { --main-bg: #f0f2f5; --panel-bg: #ffffff; --text-color: #1c1e21; --primary-color: #0056b3; --start-color: #28a745; --stop-color: #dc3545; --lock-color: #ffc107; --element-color: #6c757d; --header-bg: #e9ecef; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--main-bg); color: var(--text-color); padding: 10px; }
+        .panel { background: var(--panel-bg); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 15px; margin-bottom: 15px; }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        h1, h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 0; }
+        h1 { text-align: center; font-size: 1.5rem; margin-bottom: 15px; }
+        textarea { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; font-size: 0.9rem; margin-top: 5px; }
+        .controls { text-align: center; }
+        .controls button, .elements-grid button, .panel-header button { font-size: 1rem; padding: 12px 18px; border-radius: 5px; border: none; cursor: pointer; margin: 5px; transition: background-color 0.2s; }
+        .panel-header button { padding: 5px 10px; font-size: 0.9rem; }
+        .controls button:disabled, .elements-grid button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .controls button.start { background-color: var(--start-color); color: white; }
+        .controls button.stop { background-color: var(--stop-color); color: white; }
+        .panel-header button.lock { background-color: var(--lock-color); color: black; }
+        .elements-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 10px; }
+        .elements-grid button { background-color: var(--element-color); color: white; width: 100%; }
+        #logTable { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        #logTable th, #logTable td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9rem; }
+        #logTable th { background-color: var(--header-bg); }
+        #copyOutput { width: 100%; height: 200px; font-family: "Courier New", monospace; margin-top: 10px; white-space: pre; }
+        .copy-panel button { background-color: #17a2b8; color: white; margin-top: 10px; width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Time Study</h1>
+    <div class="panel elements-panel">
+        <div class="panel-header">
+            <h2>Work Elements</h2>
+            <button class="lock" onclick="toggleLockElements()">Lock Elements</button>
+        </div>
+        <textarea id="workElementsInput" rows="5" placeholder="Enter one work element per line..."></textarea>
+    </div>
+    <div class="panel controls">
+        <button class="start" onclick="startStudy()" disabled>Start Study</button>
+        <button class="stop" onclick="stopStudy()" disabled>Stop Study</button>
+    </div>
+    <div class="panel elements-grid-container">
+        <h2>Element Buttons</h2>
+        <div id="elementsGrid" class="elements-grid"></div>
+    </div>
+    <div class="panel log-panel">
+        <h2>Event Log</h2>
+        <div style="overflow-x:auto;"><table id="logTable"><thead><tr><th>#</th><th>Element</th><th>Total Time</th><th>Lap Time</th></tr></thead><tbody id="logBody"></tbody></table></div>
+    </div>
+    <div class="panel notes-panel">
+        <h2>General Notes</h2>
+        <textarea id="generalNotes" rows="4" placeholder="Type any general observations here..."></textarea>
+    </div>
+    <div class="panel copy-panel">
+        <h2>Copy-Paste Output</h2>
+        <textarea id="copyOutput" readonly placeholder="Formatted data appears here..."></textarea>
+        <button onclick="copyToClipboard()">Copy to Clipboard</button>
+    </div>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then(registration => {
+                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            }, err => {
+                console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+    }
+
+    let studyRunning = false, elementsLocked = false;
+    let startTime = 0, lastLapTime = 0, lapCounter = 0;
+    let logData = [];
+    
+    const elementsGrid = document.getElementById('elementsGrid');
+    const workElementsInput = document.getElementById('workElementsInput');
+    const generalNotes = document.getElementById('generalNotes');
+    const logBody = document.getElementById('logBody');
+    const copyOutput = document.getElementById('copyOutput');
+    const startButton = document.querySelector('.start');
+    const stopButton = document.querySelector('.stop');
+    const lockButton = document.querySelector('.lock');
+
+    function formatTime(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        const milliseconds = Math.round((ms % 1000) / 10);
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(2, '0')}`;
+    }
+
+    function initializeApp() {
+        workElementsInput.value = "Sıra Başı\nMalzeme Toplama Başlangıç";
+        generateElementButtons();
+        workElementsInput.addEventListener('input', generateElementButtons);
+    }
+
+    function toggleLockElements() {
+        elementsLocked = !elementsLocked;
+        workElementsInput.disabled = elementsLocked;
+        startButton.disabled = !elementsLocked;
+        lockButton.innerText = elementsLocked ? 'Unlock Elements' : 'Lock Elements';
+        generateElementButtons();
+    }
+    
+    function generateElementButtons() {
+        elementsGrid.innerHTML = '';
+        const elementNames = workElementsInput.value.split('\n').filter(name => name.trim() !== '');
+        elementNames.forEach(name => {
+            const button = document.createElement('button');
+            button.innerText = name.trim();
+            button.disabled = !studyRunning;
+            button.onclick = () => recordEvent(name.trim());
+            elementsGrid.appendChild(button);
+        });
+    }
+
+    function startStudy() {
+        if (!elementsLocked) { alert("Please lock the work elements before starting the study."); return; }
+        studyRunning = true;
+        const now = performance.now();
+        startTime = now; lastLapTime = now; lapCounter = 0; logData = [];
+        logBody.innerHTML = ''; copyOutput.value = '';
+        startButton.disabled = true; stopButton.disabled = false; lockButton.disabled = true;
+        document.querySelectorAll('#elementsGrid button').forEach(b => b.disabled = false);
+        recordEvent("Study Start");
+    }
+
+    function stopStudy() {
+        if (!studyRunning) return;
+        recordEvent("Study End");
+        studyRunning = false;
+        startButton.disabled = false; stopButton.disabled = true; lockButton.disabled = false;
+        document.querySelectorAll('#elementsGrid button').forEach(b => b.disabled = true);
+        generateCopyableText();
+    }
+
+    function recordEvent(elementName) {
+        if (!studyRunning) return;
+        const now = performance.now();
+        const totalElapsedMs = now - startTime;
+        const lapTimeMs = now - lastLapTime;
+        lastLapTime = now;
+        lapCounter++;
+        const record = { lap: lapCounter, element: elementName, totalTime: totalElapsedMs, lapTime: lapTimeMs };
+        logData.push(record);
+        const newRow = logBody.insertRow();
+        newRow.insertCell(0).innerText = record.lap;
+        newRow.insertCell(1).innerText = record.element;
+        newRow.insertCell(2).innerText = formatTime(record.totalTime);
+        newRow.insertCell(3).innerText = formatTime(record.lapTime);
+    }
+
+    function generateCopyableText() {
+        let output = "";
+        logData.slice(1).forEach(rec => {
+            const lapNum = String(rec.lap - 1).padEnd(5);
+            const total = formatTime(rec.totalTime).padEnd(12);
+            const lap = formatTime(rec.lapTime).padEnd(12);
+            output += `${lapNum}${total}${lap}${rec.element}\n`;
+        });
+        const notes = generalNotes.value;
+        if (notes.trim() !== "") {
+            output += `\n------------------------------\nGENERAL NOTES:\n------------------------------\n${notes}`;
+        }
+        copyOutput.value = output;
+    }
+
+    function copyToClipboard() {
+        if (copyOutput.value.trim() === "") { alert("No data to copy."); return; }
+        copyOutput.select();
+        copyOutput.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(copyOutput.value).then(() => {
+            const copyButton = document.querySelector('.copy-panel button');
+            copyButton.innerText = 'Copied!';
+            setTimeout(() => { copyButton.innerText = 'Copy to Clipboard'; }, 2000);
+        }).catch(err => alert('Failed to copy text.'));
+    }
+
+    window.onload = initializeApp;
+</script>
+</body>
+</html>
