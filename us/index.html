@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nekadarkaldi</title>
+    <meta name="robots" content="noindex, nofollow">
+    <style>
+        :root {
+            --accent: #ff7675;
+            --bg: #fdfcfc;
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: var(--bg);
+            font-family: -apple-system, system-ui, sans-serif;
+            color: #2d3436;
+        }
+
+        .card {
+            text-align: center;
+            background: white;
+            padding: 50px 20px;
+            border-radius: 40px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.03);
+            width: 85%;
+            max-width: 350px;
+        }
+
+        h1 {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #b2bec3;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 40px;
+        }
+
+        .timer-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .unit {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .val {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .label {
+            font-size: 0.6rem;
+            color: #d1d1d1;
+            margin-top: 8px;
+            font-weight: 600;
+        }
+
+        .heart-icon {
+            margin-top: 40px;
+            font-size: 1.5rem;
+            opacity: 0.8;
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>Kavuşmaya...</h1>
+        <div class="timer-grid">
+            <div class="unit">
+                <span id="d" class="val">00</span>
+                <span class="label">GÜN</span>
+            </div>
+            <div class="unit">
+                <span id="h" class="val">00</span>
+                <span class="label">SAAT</span>
+            </div>
+            <div class="unit">
+                <span id="m" class="val">00</span>
+                <span class="label">DAK</span>
+            </div>
+            <div class="unit">
+                <span id="s" class="val">00</span>
+                <span class="label">SN</span>
+            </div>
+        </div>
+        <div class="heart-icon">❤️</div>
+    </div>
+
+    <script>
+        // UPDATE THIS DATE TO YOUR ACTUAL MEETING TIME
+        const meetTime = new Date("March 15, 2026 18:00:00").getTime();
+
+        function run() {
+            const now = new Date().getTime();
+            const diff = meetTime - now;
+
+            if (diff <= 0) {
+                document.body.innerHTML = `
+                    <div class="card">
+                        <span style="font-size: 40px;">✨</span>
+                        <h1 style="color: #ff7675; margin-top:20px;">Vakit geldi! ❤️</h1>
+                    </div>`;
+                return;
+            }
+
+            const d = Math.floor(diff / 86400000);
+            const h = Math.floor((diff % 86400000) / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+
+            document.getElementById("d").innerText = d.toString().padStart(2, '0');
+            document.getElementById("h").innerText = h.toString().padStart(2, '0');
+            document.getElementById("m").innerText = m.toString().padStart(2, '0');
+            document.getElementById("s").innerText = s.toString().padStart(2, '0');
+        }
+
+        setInterval(run, 1000);
+        run();
+    </script>
+</body>
+</html>
